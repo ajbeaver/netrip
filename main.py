@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 LOG_DIR = BASE_DIR / "output" / "logs"
 LOG_FILE = LOG_DIR / "netrip.log"
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 def clear_screen():
     if sys.stdout.isatty():

@@ -3,7 +3,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from lib.network import get_network_info, NetworkError
+from lib.network import get_network_info, validate_target, NetworkError
 from lib.discovery import discover_hosts, DiscoveryError
 from lib.inventory import create_snapshot, save_snapshot, InventoryError
 
@@ -33,6 +33,11 @@ def parse_args():
         action="count",
         default=0,
         help="Increase verbosity (-v, -vv, -vvv)"
+    )
+    parser.add_argument(
+        "--inspect",
+        metavar="IPv4",
+        help="Select a local IPv4 host for targeted inspection"
     )
     return parser.parse_args()
 
@@ -111,6 +116,19 @@ def main():
     print(f"Address   : {network.address}")
     print(f"Gateway   : {network.gateway}")
     print(f"Network   : {network.network}")
+
+    if args.inspect is not None:
+        try:
+            target = validate_target(args.inspect, network)
+        except NetworkError as exc:
+            logger.error("Invalid inspection target: %s", exc)
+            return 1
+
+        print(f"\nInspection target : {target}")
+        print("Status            : Validated")
+        logger.info("Host selected for inspection: %s", target)
+        logger.debug("Targeted inspection pending implementation in issue #3")
+        return 0
 
     logger.debug("Entering host discovery")
 

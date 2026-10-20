@@ -1,0 +1,29 @@
+# Network reconnaissance output
+/output/
+/captures/
+*.pcap
+*.pcapng
+
+# Nmap scan artifacts
+*.gnmap
+*.nmap
+*.xml
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor and OS artifacts
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python (future compatibility)
+__pycache__/
+*.py[cod]
+.venv/

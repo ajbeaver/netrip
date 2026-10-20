@@ -8,11 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .network import NetworkInfo
 from .discovery import DiscoveredHost
+from .inspection import InspectionResult
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
-SCAN_DIR = Path(__file__).resolve().parent.parent / "output" / "scans"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+SCAN_DIR = OUTPUT_DIR / "scans"
+INSPECTION_DIR = OUTPUT_DIR / "inspections"
 
 class InventoryError(Exception):
     """Raised when inventory creation or persistence fails."""
@@ -45,7 +48,7 @@ def create_snapshot(
         },
     }
     logger.debug(
-        "Created snapshot with %d hosts (schema v%d)",
+        "Created network snapshot with %d hosts (schema v%d)",
         len(hosts),
         SCHEMA_VERSION,
     )
@@ -71,7 +74,43 @@ def save_snapshot(snapshot: dict, directory: Path = SCAN_DIR) -> Path:
         with os.fdopen(descriptor, "w", encoding="utf-8") as file:
             file.write(content)
 
-        logger.info("Saved scan snapshot: %s", destination)
+        logger.info("Saved snapshot: %s", destination)
         return destination
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise InventoryError(f"Unable to save snapshot: {exc}") from exc
+
+def create_inspection_snapshot(result: InspectionResult) -> dict:
+    """Create a serializable record of a completed host inspection."""
+    timestamp = datetime.now(timezone.utc)
+    snapshot = {
+        "schema_version": SCHEMA_VERSION,
+        "type": "host_inspection",
+        "timestamp": timestamp.isoformat(),
+        "target": {
+            "address": str(result.address),
+            "status": result.status,
+        },
+        "scan": {
+            "method": "nmap-tcp-service-detection",
+            "technique": "tcp-connect",
+            "port_selection": "nmap-default-top-1000-tcp",
+            "service_detection": True,
+            "open_port_count": len(result.services),
+            "services": [
+                asdict(service)
+                for service in sorted(result.services, key=lambda s: s.port)
+            ],
+        },
+    }
+    logger.debug(
+        "Created inspection snapshot for %s with %d open ports",
+        result.address,
+        len(result.services),
+    )
+    return snapshot
+
+def save_inspection_snapshot(snapshot: dict) -> Path:
+    """Persist a host inspection under the restricted inspection directory."""
+    if snapshot.get("type") != "host_inspection":
+        raise InventoryError("Invalid inspection snapshot type")
+    return save_snapshot(snapshot, directory=INSPECTION_DIR)

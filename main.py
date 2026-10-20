@@ -5,7 +5,13 @@ import sys
 from pathlib import Path
 from lib.network import get_network_info, validate_target, NetworkError
 from lib.discovery import discover_hosts, DiscoveryError
-from lib.inventory import create_snapshot, save_snapshot, InventoryError
+from lib.inventory import (
+    create_snapshot,
+    save_snapshot,
+    create_inspection_snapshot,
+    save_inspection_snapshot,
+    InventoryError,
+)
 from lib.inspection import inspect_host, InspectionError
 
 logger = logging.getLogger(__name__)
@@ -119,7 +125,6 @@ def print_inspection(result):
         product = " ".join(
             part for part in (service.product, service.version) if part
         ) or "Unknown"
-
         print(
             f"{port:<10} "
             f"{service.state:<10} "
@@ -160,6 +165,15 @@ def main():
             return 1
 
         print_inspection(result)
+
+        try:
+            snapshot = create_inspection_snapshot(result)
+            saved_path = save_inspection_snapshot(snapshot)
+        except InventoryError as exc:
+            logger.error("Inspection persistence failed: %s", exc)
+            return 1
+
+        logger.info("Inspection saved to %s", saved_path)
         logger.info("Host inspection completed")
         return 0
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from lib.network import get_network_info, validate_target, NetworkError
 from lib.discovery import discover_hosts, DiscoveryError
 from lib.inventory import create_snapshot, save_snapshot, InventoryError
+from lib.inspection import inspect_host, InspectionError
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +38,12 @@ def parse_args():
     parser.add_argument(
         "--inspect",
         metavar="IPv4",
-        help="Select a local IPv4 host for targeted inspection"
+        help="Inspect TCP services on a local IPv4 host"
     )
     return parser.parse_args()
 
 def configure_logging(verbosity):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-
     levels = {
         0: logging.ERROR,
         1: logging.WARNING,
@@ -69,14 +69,12 @@ def redact_mac(mac):
     """Hide the device-specific portion of a MAC address."""
     if not mac:
         return "N/A"
-
     parts = mac.split(":")
     if len(parts) != 6 or any(
         len(part) != 2 or any(char not in "0123456789abcdefABCDEF" for char in part)
         for part in parts
     ):
         return "REDACTED"
-
     return ":".join(parts[:3] + ["XX"] * 3)
 
 def print_hosts(hosts):
@@ -89,13 +87,44 @@ def print_hosts(hosts):
         f"Manufacturer"
     )
     print("-" * 85)
-
     for host in sorted(hosts, key=lambda h: h.address):
         print(
             f"{str(host.address):<16} "
             f"{(host.hostname or 'Unknown'):<28.28} "
             f"{redact_mac(host.mac):<18} "
             f"{host.vendor or 'Unknown'}"
+        )
+
+def print_inspection(result):
+    """Display open TCP services for a selected host."""
+    print(f"\nInspection target : {result.address}")
+    print(f"Host status       : {result.status}")
+    print(f"Open TCP ports    : {len(result.services)}\n")
+
+    if not result.services:
+        print("No open TCP services detected.")
+        return
+
+    print(
+        f"{'Port':<10} "
+        f"{'State':<10} "
+        f"{'Service':<18} "
+        f"Product / Version"
+    )
+    print("-" * 75)
+
+    for service in result.services:
+        port = f"{service.port}/{service.protocol}"
+        name = service.service or "Unknown"
+        product = " ".join(
+            part for part in (service.product, service.version) if part
+        ) or "Unknown"
+
+        print(
+            f"{port:<10} "
+            f"{service.state:<10} "
+            f"{name:<18.18} "
+            f"{product}"
         )
 
 def main():
@@ -124,10 +153,14 @@ def main():
             logger.error("Invalid inspection target: %s", exc)
             return 1
 
-        print(f"\nInspection target : {target}")
-        print("Status            : Validated")
-        logger.info("Host selected for inspection: %s", target)
-        logger.debug("Targeted inspection pending implementation in issue #3")
+        try:
+            result = inspect_host(target)
+        except InspectionError as exc:
+            logger.error("Host inspection failed: %s", exc)
+            return 1
+
+        print_inspection(result)
+        logger.info("Host inspection completed")
         return 0
 
     logger.debug("Entering host discovery")
